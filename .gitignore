@@ -1,0 +1,7 @@
+*.[aod]
+.DS_*
+*Thumbs.*
+*.log
+node_modules
+package-lock.json
+/excel
