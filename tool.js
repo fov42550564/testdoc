@@ -29,6 +29,8 @@ async function parseSingleExcelFile(filename) {
                         let value = cell.value;
                         if (typeof value === 'string') {
                             value = value.replace(/\r\n|\r|\n/g, '<br>');
+                        } else if (value.richText) {
+                            value = value.richText.map(o=>o.text).join('');
                         }
                         line = `${line} ${value} |`;
                     }
