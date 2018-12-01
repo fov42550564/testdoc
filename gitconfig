@@ -1,0 +1,105 @@
+[user]
+
+	email = 42550564@qq.com
+
+	name = fov42550564
+
+[color]
+
+	ui = true
+
+[alias]
+
+	co = checkout
+
+	ci = commit -a
+
+	cm = commit
+
+	st = status
+
+	br = branch
+
+	di = diff
+
+	pu = push -u origin master
+
+	pupage = push origin gh-pages
+
+	puf = push origin master --force
+
+	pl = pull
+
+	line = "log --pretty=oneline --since='two hours ago'"
+
+	one = log -p -1
+
+	lg = "log --date=short --graph --pretty=format:'%Cred%h%Creset:[%Cgreen%cn%Creset][%Cgreen%cd%Creset]:%C(bold blue)%s%Creset'"
+
+	cihd = "commit -C HEAD --amend"
+
+	cihead = "commit -C HEAD -a --amend"
+
+	uphead = "commit --amend -m"
+
+	rshead = "reset --hard HEAD"
+
+	rs = "reset --hard"
+
+	rsmaster = "reset --hard origin/master"
+
+	noadd = "rm -r --cached"
+
+	noaddall = "rm -r --cached ."
+
+	bare="init --bare"
+
+	remoteadd="remote add origin"
+
+	brpu="push --set-upstream origin roadmap"
+
+	brpl="pull origin roadmap roadmap"
+
+[core]
+
+	pager = 
+
+	autocrlf = false
+
+	editor = /usr/bin/vim
+
+[diff]
+
+	tool = bc4
+
+[difftool]
+
+	prompt = false
+
+[difftool "bc4"]
+
+	cmd = "\"C:\\Program Files\\Beyond Compare 4\\BCompare.exe\" \"$LOCAL\" \"$REMOTE\""
+
+[merge]
+
+	tool = bc4
+
+[mergetool "bc4"]
+
+	cmd = "\"C:\\Program Files\\Beyond Compare 4\\BCompare.exe\" \"$LOCAL\" \"$REMOTE\" \"$BASE\" \"$MERGED\""
+
+	keepBackup = false
+
+	trustExitCode = false
+
+[http]
+
+	postBuffer = 2077721600
+
+[filter "lfs"]
+
+	clean = git-lfs clean -- %f
+
+	smudge = git-lfs smudge -- %f
+
+	required = true
