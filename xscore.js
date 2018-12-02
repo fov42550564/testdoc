@@ -6,6 +6,7 @@ const program = require('commander');
 const colors = require('colors');
 const printf = require('printf');
 const repeat = require('lodash.repeat');
+const pinyin = require('./pinyin');
 
 colors.setTheme({
     BORDER_COLOR: 'green',
@@ -202,7 +203,7 @@ class Dialog {
         }
         this.showBottomLineBoder(width);
     }
-    async radiobox (title, disp, list, callback, isUpdate, width) {
+    async radiobox (title, disp, list, callback, width) {
         width = width || this.DIALOG_WIDTH;
         var len = list.length;
         while (true) {
@@ -228,188 +229,108 @@ class Dialog {
                 this.error('the select number is out of range');
                 continue;
             }
-            callback(list[index]);
-            if (isUpdate) {
-                list.splice(index, 1);
-                len--;
-            }
-            await this.pause();
+            callback(list[index], index);
+            break;
         }
     }
 };
-
 const dialog = new Dialog();
-const MAX_COL = 7;
 
-function writeFile(mdname, line) {
-    // console.log(mdname, line+'\n');
-    fs.appendFileSync(mdname, line+'\n');
+function getFirstPinyinForWord(ch) {
+    var uni = ch.charCodeAt(0);
+    if (uni >= 48 && uni <= 57) {
+        return "1";
+    }
+    if (uni >= 65 && uni <=90) {
+        return uni;
+    }
+    if (uni >= 97 && uni <=122) {
+        return String.fromCharCode(uni-32);
+    }
+    if (uni > 40869 || uni < 19968) {
+        return "#";
+    }
+    return pinyin.charAt(uni - 19968);
 }
-async function parseSingleExcelFile(filename, config) {
+function getFirstPinyin(str) {
+    let ret = '';
+    for (const ch of str) {
+        ret += getFirstPinyinForWord(ch);
+    }
+    return ret;
+}
+async function setScoreForItem(filename, item, sc, wb, ws, map) {
+    ws.getCell(`${item.colNumber}${item.rowNumber}`).value = sc;
+    await wb.xlsx.writeFile(filename);
+    console.log(`${item.name}: ${sc} 设置完成`);
+    getInputValue(filename, wb, ws, map);
+}
+async function getInputValue(filename, wb, ws, map) {
+    const str = await dialog.inputbox('请输入：'.INDEX_COLOR);
+    if (str === 'q' || str === 'exit' || str === 'quit') {
+        return;
+    }
+    const matches = str.match(/^([a-z]+)([0-9.]+)$/);
+    if (!matches) {
+        console.log('格式必须为：zs99');
+        return getInputValue(filename, wb, ws, map);
+    }
+    const py = matches[1].toUpperCase();
+    const sc = +matches[2];
+
+    const list = map.filter(o=>o.py===py);
+    if (list.length > 1) {
+        dialog.radiobox("set", "选择一个来设置分数", list.map(o=>o.name), (unused, index)=>{
+            setScoreForItem(filename, list[index], sc, wb, ws, map);
+        });
+    } else if (list.length === 1) {
+        setScoreForItem(filename, list[0], sc, wb, ws, map);
+    } else {
+        console.log(`没有找到该学生`);
+        getInputValue(filename, wb, ws, map);
+    }
+}
+async function main(filename, min, max) {
+    const map = [];
     const wb = new Excel.Workbook();
-    console.log(`开始分析 ${filename}.xlsx`);
-    fs.emptyDirSync(path.join('docs', filename));
-    await wb.xlsx.readFile(path.join('excel', `${filename}.xlsx`));
-    let i = 0;
-    const pages = [];
-    wb.eachSheet(ws => {
-        console.log(`开始写 ${ws.name}.md`);
-        config && pages.push({ name: ws.name, path: `${filename}/${i}_${ws.name}.md` });
-        mdname = path.join('docs', filename, `${i++}_${ws.name}.md`);
-        ws.eachRow((row, rowNumber)=>{
-            if (rowNumber === 1) {
-                writeFile(mdname, '| 编号 | 测试项 | 测试描述 | 测试结果 | 测试版本 | 测试时间 | 测试员 |');
-                writeFile(mdname, '| :-: | :-: | :- | :- | :-: | :-: | :-: |');
-            } else {
-                let line = '|';
-                row.eachCell((cell, colNumber)=>{
-                    if (colNumber <= MAX_COL) {
-                        let value = cell.value;
-                        if (typeof value === 'string') {
-                            value = value.replace(/\r\n|\r|\n/g, '<br>');
-                        } else if (value.richText) {
-                            value = value.richText.map(o=>o.text).join('');
-                        }
-                        line = `${line} ${value} |`;
-                    }
-                });
-                writeFile(mdname, line);
-            }
-        });
+    await wb.xlsx.readFile('1.xlsx');
+    const ws = wb.getWorksheet(1);
+    const name1 = ws.getColumn('B'); //E
+    const name2 = ws.getColumn('N'); //Q
+
+    name1.eachCell((cell, rowNumber)=>{
+        if (rowNumber >=min && rowNumber <= max && cell.value) {
+            map.push({ name: cell.value, py: getFirstPinyin(cell.value), colNumber: 'E', rowNumber });
+        }
     });
-    config && config.menus.push({ name: filename, groups: [ { pages } ] });
-}
-async function parseAllExcelFile(root, config) {
-    const files = fs.readdirSync(root);
-    config && (config.menus = []);
-    for (const file of files) {
-        if (/^[^~.\.].*\.xlsx$/.test(file)) {
-            await parseSingleExcelFile(file.replace('.xlsx', ''), config);
+    name2.eachCell((cell, rowNumber)=>{
+        if (rowNumber >=min && rowNumber <= max && cell.value) {
+            map.push({ name: cell.value, py: getFirstPinyin(cell.value), colNumber: 'Q', rowNumber });
         }
-    }
-    if (config) {
-        fs.writeFileSync('./document/config.js', `module.exports = ${JSON.stringify(config, null, 4)}`);
-        let files = fs.readdirSync('./document/docs');
-        for (const file of files) {
-            const _file = path.join('./document/docs', file);
-            if (fs.lstatSync(_file).isSymbolicLink()) {
-                fs.removeSync(_file);
-            }
-        }
-        files = fs.readdirSync('./docs');
-        for (const file of files) {
-            const _file = path.join('./docs', file);
-            if (fs.lstatSync(_file).isDirectory()) {
-                fs.ensureSymlinkSync(_file, path.join('./document/docs', file));
-            }
-        };
-    }
-}
-function readFileLine(filename, ws) {
-    return new Promise(resolve=>{
-        const rl = readline.createInterface({
-            input: fs.createReadStream(filename)
-        });
-        let i = 0;
-        rl.on('line', line=>{
-            if (i++ > 1) {
-                line = line.replace(/^\s*\|/, '').replace(/\|\s*$/, '');
-                const row = line.split('|').map(o=>o.trim()).map(o=>o.replace(/<br>/g, '\r\n'));
-                ws.addRow(row);
-            }
-        });
-        rl.on('close', ()=>{
-            resolve();
-        });
     });
-}
-async function createExcelSheetFile(wb, name, filename) {
-    const ws = wb.addWorksheet(name);
-    ws.columns = [
-        { header: '编号', width: 6, style: { alignment: { vertical: 'top', horizontal: 'center' } } },
-        { header: '测试项', width: 20, style: { alignment: { vertical: 'top', horizontal: 'center' } } },
-        { header: '测试描述', width: 50, style: { alignment: { wrapText: true } } },
-        { header: '测试结果', width: 50, style: { alignment: { wrapText: true, vertical: 'top' } } },
-        { header: '测试版本', width: 10, style: { alignment: { vertical: 'top', horizontal: 'center' } } },
-        { header: '测试时间', width: 14, style: { alignment: { vertical: 'top', horizontal: 'center' } } },
-        { header: '测试员', width: 10, style: { alignment: { vertical: 'top', horizontal: 'center' } } },
-    ];
-    await readFileLine(filename, ws);
-}
-async function createSingleExcelFile(name, dir, dist) {
-    const wb = await new Excel.Workbook();
-    const files = fs.readdirSync(dir);
-    let cnt = 0;
-    for (const file of files) {
-        if (/\.md$/.test(file)) {
-            cnt++;
-            await createExcelSheetFile(wb, file.replace(/^\d+_|\.md$/g, ''), path.join(dir, file));
-        }
-    }
-    if (cnt > 0) {
-        await wb.xlsx.writeFile(path.join(dist, `${name}.xlsx`));
-        console.log(`生成 ${name}.xlsx 成功`);
-    }
-}
-async function createAllExcelFile(root, dist) {
-    fs.emptyDirSync(dist);
-    const files = fs.readdirSync(root);
-    for (const file of files) {
-        const dir = path.join(root, file);
-        if (fs.lstatSync(dir).isDirectory()) {
-            await createSingleExcelFile(file, dir, dist);
-        }
-    }
+    getInputValue(filename, wb, ws, map);
 }
 
 program
 .version('0.0.1')
-.option('-e, --excel', '使用docs中的一个文件夹名生产excel文件在excel目录中，如果为all则生成所有的excel文件')
-.option('-d, --docs', '使用excel中的一个excel文件生成md文件在mdoc中，如果为all这生成所有的md文件')
-.option('-c, --config', '生产config文件，只有 -d all 的时候有效【测试人员禁用】')
+.option('-b, --banji <1>', '设置班级，1：1班，2：2班，3：3班')
+.option('-f, --filename <xx.xlsx>', '设置文件')
 .parse(process.argv);
 
 if (!process.argv.slice(2).length) {
     program.help();
 }
 
-const {  excel, docs,config } = program;
+const { banji, filename } = program;
+if (!filename) {
+    console.log('必须设置xlsx文件');
+    process.exit(0);
+}
 
-if (docs) {
-    const files = fs.readdirSync('excel');
-    const list = ['all'];
-    for (const file of files) {
-        if (/^[^~.\.].*\.xlsx$/.test(file)) {
-            list.push(file);
-        }
-    }
-    dialog.radiobox("change", "选择一个excel文件来转化为md文件在mdoc中", list, async (file)=>{
-        if (file === 'all') {
-            if (config) {
-                await parseAllExcelFile('excel', require('./document/config.js'));
-            } else {
-                await parseAllExcelFile('excel');
-            }
-        } else {
-            await parseSingleExcelFile(file.replace('.xlsx', ''));
-        }
-        process.exit(0);
-    });
-} else if (excel) {
-    const files = fs.readdirSync('docs');
-    const list = ['all'];
-    for (const file of files) {
-        const dir = path.join('docs', file);
-        if (fs.lstatSync(dir).isDirectory()) {
-            list.push(file);
-        }
-    }
-    dialog.radiobox("change", "选择一个docs中的文件夹来转化为excel文件在excel中", list, async (file)=>{
-        if (file === 'all') {
-            await createAllExcelFile('docs', 'excel');
-        } else {
-            await createSingleExcelFile(file, path.join('docs', file), 'excel');
-        }
-        process.exit(0);
-    });
+if (banji === '1') {
+    main(filename, 4, 38);
+} else if (banji === '2') {
+    main(filename, 47, 81);
+} else if (banji === '3') {
+    main(filename, 90, 124);
 }
