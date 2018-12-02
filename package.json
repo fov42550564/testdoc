@@ -1,0 +1,10 @@
+{
+  "name": "doc",
+  "dependencies": {
+    "colors": "^1.3.2",
+    "exceljs": "^1.6.3",
+    "fs-extra": "^7.0.1",
+    "lodash.repeat": "^4.1.0",
+    "printf": "^0.5.1"
+  }
+}
