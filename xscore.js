@@ -236,6 +236,31 @@ class Dialog {
 };
 const dialog = new Dialog();
 
+function isSamePinyin(py1, py2) {
+    if (program.mohu) {
+        for (let i = 0; i < py1.length; i++) {
+            let ch1 = py1[i];
+            let ch2 = py2[i];
+
+                console.log("=====",i, ch1, ch2);
+            if (ch1 === 'N' || ch1 === 'L') {
+                if (ch2 !== 'N' && ch2 !== 'L') {
+                    return false;
+                }
+            } else if (ch1 === 'F' || ch1 === 'H') {
+                if (ch2 !== 'F' && ch2 !== 'H') {
+                    return false;
+                }
+            } else {
+                if (ch1 !== ch2) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    return py1 === py2;
+}
 function getFirstPinyinForWord(ch) {
     var uni = ch.charCodeAt(0);
     if (uni >= 48 && uni <= 57) {
@@ -278,7 +303,8 @@ async function getInputValue(filename, wb, ws, map) {
     const py = matches[1].toUpperCase();
     const sc = +matches[2];
 
-    const list = map.filter(o=>o.py===py);
+    const list = map.filter(o=>isSamePinyin(py, o.py));
+
     if (list.length > 1) {
         dialog.radiobox("set", "选择一个来设置分数", list.map(o=>o.name), (unused, index)=>{
             setScoreForItem(filename, list[index], sc, wb, ws, map);
@@ -293,7 +319,7 @@ async function getInputValue(filename, wb, ws, map) {
 async function main(filename, min, max) {
     const map = [];
     const wb = new Excel.Workbook();
-    await wb.xlsx.readFile('1.xlsx');
+    await wb.xlsx.readFile(filename);
     const ws = wb.getWorksheet(1);
     const name1 = ws.getColumn('B'); //E
     const name2 = ws.getColumn('N'); //Q
@@ -315,6 +341,7 @@ program
 .version('0.0.1')
 .option('-b, --banji <1>', '设置班级，1：1班，2：2班，3：3班')
 .option('-f, --filename <xx.xlsx>', '设置文件')
+.option('-m, --mohu', '是否使用模糊音h=f/l=n')
 .parse(process.argv);
 
 if (!process.argv.slice(2).length) {
