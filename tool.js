@@ -5,6 +5,7 @@ const readline = require('readline');
 const program = require('commander');
 const colors = require('colors');
 const printf = require('printf');
+const moment = require('moment');
 const repeat = require('lodash.repeat');
 
 colors.setTheme({
@@ -262,17 +263,22 @@ async function parseSingleExcelFile(filename, config) {
                 writeFile(mdname, '| :-: | :-: | :- | :- | :-: | :-: | :-: |');
             } else {
                 let line = '|';
-                row.eachCell((cell, colNumber)=>{
-                    if (colNumber <= MAX_COL) {
-                        let value = cell.value;
-                        if (typeof value === 'string') {
-                            value = value.replace(/\r\n|\r|\n/g, '<br>');
-                        } else if (value.richText) {
+                for (let i=1; i<=MAX_COL; i++) {
+                    let value = row.getCell(i).value;
+                    if (value != null) {
+                        if (value.richText) {
                             value = value.richText.map(o=>o.text).join('');
                         }
-                        line = `${line} ${value} |`;
+                        if (typeof value === 'string') {
+                            value = value.replace(/\r\n|\r|\n/g, '<br>');
+                        } else if (value instanceof Date) {
+                            value = moment(value).format('YYYY-MM-DD');
+                        }
+                    } else {
+                        value = '';
                     }
-                });
+                    line = `${line} ${value} |`;
+                }
                 writeFile(mdname, line);
             }
         });
